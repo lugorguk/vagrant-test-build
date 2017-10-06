@@ -18,7 +18,11 @@ This repo contains the Vagrantfile and link to any relevant repositories - notab
 
 Once you have finished with the environment, run `vagrant destroy` to clean it completely or `vagrant halt` to stop it. If you have made changes you want to test, without destroying and re-building the VMs, run `vagrant provision`
 
+-----
+
 Any issues, please raise an issue on the relevant project:
 * https://github.com/lugorguk/vagrant-lab-infrastructure : This project, related specifically to the Vagrantfile
 * https://github.com/lugorguk/ansible-playbook : The ansible playbook which will be deployed by the Vagrantfile
 * https://github.com/lugorguk/common : Common activities performed on all the lug.org.uk servers
+
+This is the code which will drive lug.org.uk. It was created by Jon "The Nice Guy" Spriggs (jon@sprig.gs | https://jon.sprig.gs | https://twitter.com/jontheniceguy)
