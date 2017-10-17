@@ -33,6 +33,16 @@ Vagrant.configure("2") do |config|
       ansible.limit               = "admin.lug.org.uk"
       ansible.inventory_path      = "ansible/hosts.lab"
       ansible.vault_password_file = "ansible/vault-password"
+      ansible.extra_vars          = {lab: true}
+      if ENV['ansible_verbose'] != ''
+        ansible.verbose           = ENV['ansible_verbose']
+      end
+      if ENV['ansible_tags'] != ''
+        ansible.tags              = ENV['ansible_tags']
+      end
+      if ENV['ansible_skip'] != ''
+        ansible.skip_tags         = ENV['ansible_skip']
+      end
     end
   end
 
