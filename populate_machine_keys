@@ -1,0 +1,32 @@
+#!/bin/bash
+function help_message() {
+  echo "populate_machine_keys <source> <destination>"
+  if [ "$1" == "" ]
+  then
+    exit 0
+  else
+    exit "$1"
+  fi 
+}
+
+function fail_source() {
+  echo "Missing source path."
+  help_message 1
+}
+
+if [ -e "$1" ]
+then
+  SOURCE="$1"
+else
+  fail_source
+fi
+
+if [ ! -e "$2" ]
+then
+  mkdir -p "$2"
+fi
+
+DEST="$2"
+
+SOURCE_NAME="$(echo "$SOURCE" | cut -d/ -f5)"
+cp "$SOURCE" "${DEST}${SOURCE_NAME}_id_rsa"
