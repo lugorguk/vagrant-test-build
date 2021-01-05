@@ -4,9 +4,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.box_check_update = false
 
-  #config.vm.provider "virtualbox" do |v|
-  #  v.memory = 2048
-  #end
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 1536 # 1.5Gb
+  end
 
   config.cache.scope = :box
   config.cache.enable :apt
@@ -33,7 +33,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.define :admin do |admin|
     admin.vm.hostname = "admin.lug.org.uk"
-    admin.vm.network "private_network", ip: "192.0.2.10"  
+    admin.vm.network "private_network", ip: "203.0.113.10" # RFC5737 Test Network 3
     admin.vm.provider "virtualbox" do |v|
       v.name = "admin"
     end
@@ -101,12 +101,12 @@ Vagrant.configure("2") do |config|
                 fi
                 systemctl enable --now etc-ansible-install.mount"
 
-  #  admin.vm.provision "ansible_local", run: "always" do |ansible|
-  #    ansible.playbook            = "/etc/ansible/install/site.yml"
-  #    ansible.limit               = "all"
-  #    ansible.playbook_command    = "/usr/bin/sudo /usr/local/bin/ansible-playbook"
-  #  #   ansible.vault_password_file = "/etc/ansible/install/vaultpw"
-  #    ansible.inventory_path      = "/etc/ansible/hosts"
-  #  end
+    admin.vm.provision "ansible_local", run: "always" do |ansible|
+      ansible.playbook            = "/etc/ansible/install/site.yml"
+      ansible.limit               = "all"
+      ansible.playbook_command    = "/usr/bin/sudo /usr/local/bin/ansible-playbook"
+      ansible.vault_password_file = "/etc/ansible/install/vaultpw"
+      ansible.inventory_path      = "/etc/ansible/hosts"
+    end
   end
 end
