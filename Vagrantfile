@@ -8,6 +8,8 @@ Vagrant.configure("2") do |config|
     v.memory = 1536 # 1.5Gb
   end
 
+  config.vagrant.plugins = [ "vagrant-cachier" ]
+
   config.cache.scope = :box
   config.cache.enable :apt
   config.cache.enable :apt_lists
