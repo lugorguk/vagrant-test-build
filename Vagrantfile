@@ -15,10 +15,10 @@ Vagrant.configure("2") do |config|
   config.cache.enable :apt_lists
   config.cache.enable :generic, {
     "vagrant_pip" => {
-      cache_dir: "/home/vagrant/.cache/pip"
+      cache_dir: "/mnt/pip/vagrant"
     },
     "root_pip" => {
-      cache_dir: "/root/.cache/pip"
+      cache_dir: "/mnt/pip/root"
     },
   }
 
@@ -31,6 +31,36 @@ Vagrant.configure("2") do |config|
                 chmod 700 /root/.ssh
                 chown -R root:root /root/.ssh
               fi
+              apt update && apt install -y bindfs
+              {
+                echo '[Unit]'
+                echo 'Description=BindFS Mount of /mnt/pip/root to /root/.cache/pip'
+                echo ''
+                echo '[Mount]'
+                echo 'What=/mnt/pip/root'
+                echo 'Where=/root/.cache/pip'
+                echo 'Type=fuse.bindfs'
+                echo 'Options=user=root,group=root,perms=0640:ugd+x'
+                echo ''
+                echo '[Install]'
+                echo 'WantedBy=multi-user.target'
+              } > /etc/systemd/system/root-.cache-pip.mount
+              {
+                echo '[Unit]'
+                echo 'Description=BindFS Mount of /mnt/pip/vagrant to /home/vagrant/.cache/pip'
+                echo ''
+                echo '[Mount]'
+                echo 'What=/mnt/pip/vagrant'
+                echo 'Where=/home/vagrant/.cache/pip'
+                echo 'Type=fuse.bindfs'
+                echo 'Options=user=vagrant,group=vagrant,perms=0640:ugd+x'
+                echo ''
+                echo '[Install]'
+                echo 'WantedBy=multi-user.target'
+              } > /etc/systemd/system/home-vagrant-.cache-pip.mount
+              systemctl enable --now root-.cache-pip.mount
+              systemctl enable --now home-vagrant-.cache-pip.mount
+              chown -R vagrant:vagrant /home/vagrant/.cache
              "
 
   config.vm.define :admin do |admin|
@@ -65,13 +95,13 @@ Vagrant.configure("2") do |config|
                 chmod 600 /etc/ansible/keys/*
                 chmod 700 /etc/ansible/keys
 
-                if [ ! -e /etc/ansible/ansible.cfg ]
-                then
-                  wget -q \"https://raw.githubusercontent.com/ansible/ansible/v${AnsibleVersion}/examples/ansible.cfg\" -O /etc/ansible/ansible.cfg
-                  chmod 644 /etc/ansible/ansible.cfg
-                  ansible localhost -m lineinfile -a \"regexp='^#?host_key_checking.*' line='host_key_checking = False' path=/etc/ansible/ansible.cfg\"
-                  ansible localhost -m lineinfile -a \"regexp='^#?ssh_args.*' line='ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes' path=/etc/ansible/ansible.cfg\"
-                fi
+                #if [ ! -e /etc/ansible/ansible.cfg ]
+                #then
+                #  wget -q \"https://raw.githubusercontent.com/ansible/ansible/v${AnsibleVersion}/examples/ansible.cfg\" -O /etc/ansible/ansible.cfg
+                #  chmod 644 /etc/ansible/ansible.cfg
+                #  ansible localhost -m lineinfile -a \"regexp='^#?host_key_checking.*' line='host_key_checking = False' path=/etc/ansible/ansible.cfg\"
+                #  ansible localhost -m lineinfile -a \"regexp='^#?ssh_args.*' line='ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes' path=/etc/ansible/ansible.cfg\"
+                #fi
                 if [ ! -e /etc/ansible/hosts ]
                 then
                   echo 'admin ansible_connection=local' > /etc/ansible/hosts
