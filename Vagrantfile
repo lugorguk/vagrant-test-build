@@ -95,13 +95,13 @@ Vagrant.configure("2") do |config|
                 chmod 600 /etc/ansible/keys/*
                 chmod 700 /etc/ansible/keys
 
-                #if [ ! -e /etc/ansible/ansible.cfg ]
-                #then
-                #  wget -q \"https://raw.githubusercontent.com/ansible/ansible/v${AnsibleVersion}/examples/ansible.cfg\" -O /etc/ansible/ansible.cfg
-                #  chmod 644 /etc/ansible/ansible.cfg
-                #  ansible localhost -m lineinfile -a \"regexp='^#?host_key_checking.*' line='host_key_checking = False' path=/etc/ansible/ansible.cfg\"
-                #  ansible localhost -m lineinfile -a \"regexp='^#?ssh_args.*' line='ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes' path=/etc/ansible/ansible.cfg\"
-                #fi
+                if [ ! -e /etc/ansible/ansible.cfg ]
+                then
+                 wget -q \"https://raw.githubusercontent.com/ansible/ansible/v${AnsibleVersion}/examples/ansible.cfg\" -O /etc/ansible/ansible.cfg
+                 chmod 644 /etc/ansible/ansible.cfg
+                 ansible localhost -m lineinfile -a \"regexp='^#?host_key_checking.*' line='host_key_checking = False' path=/etc/ansible/ansible.cfg\"
+                 ansible localhost -m lineinfile -a \"regexp='^#?ssh_args.*' line='ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes' path=/etc/ansible/ansible.cfg\"
+                fi
                 if [ ! -e /etc/ansible/hosts ]
                 then
                   echo 'admin ansible_connection=local' > /etc/ansible/hosts
