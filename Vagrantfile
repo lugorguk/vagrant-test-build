@@ -56,7 +56,7 @@ Vagrant.configure("2") do |config|
                     pip3 install --upgrade ansible
                   fi
                 fi
-                AnsibleVersion=\"$(pip3 freeze 2>/dev/null | grep ansible= | cut -d= -f3)\"
+                AnsibleVersion=\"$(pip3 freeze 2>/dev/null | grep ansible-base= | cut -d= -f3)\"
 
                 mkdir -p /etc/ansible/keys
                 chmod 755 /etc/ansible
