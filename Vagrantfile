@@ -8,20 +8,6 @@ Vagrant.configure("2") do |config|
     v.memory = 1536 # 1.5Gb
   end
 
-  config.vagrant.plugins = [ "vagrant-cachier" ]
-
-  config.cache.scope = :box
-  config.cache.enable :apt
-  config.cache.enable :apt_lists
-  config.cache.enable :generic, {
-    "vagrant_pip" => {
-      cache_dir: "/mnt/pip/vagrant"
-    },
-    "root_pip" => {
-      cache_dir: "/mnt/pip/root"
-    },
-  }
-
   config.vm.provision "shell",
     inline:  "if [ ! -e /root/.ssh ]
               then
@@ -31,36 +17,6 @@ Vagrant.configure("2") do |config|
                 chmod 700 /root/.ssh
                 chown -R root:root /root/.ssh
               fi
-              apt update && apt install -y bindfs
-              {
-                echo '[Unit]'
-                echo 'Description=BindFS Mount of /mnt/pip/root to /root/.cache/pip'
-                echo ''
-                echo '[Mount]'
-                echo 'What=/mnt/pip/root'
-                echo 'Where=/root/.cache/pip'
-                echo 'Type=fuse.bindfs'
-                echo 'Options=user=root,group=root,perms=0640:ugd+x'
-                echo ''
-                echo '[Install]'
-                echo 'WantedBy=multi-user.target'
-              } > /etc/systemd/system/root-.cache-pip.mount
-              {
-                echo '[Unit]'
-                echo 'Description=BindFS Mount of /mnt/pip/vagrant to /home/vagrant/.cache/pip'
-                echo ''
-                echo '[Mount]'
-                echo 'What=/mnt/pip/vagrant'
-                echo 'Where=/home/vagrant/.cache/pip'
-                echo 'Type=fuse.bindfs'
-                echo 'Options=user=vagrant,group=vagrant,perms=0640:ugd+x'
-                echo ''
-                echo '[Install]'
-                echo 'WantedBy=multi-user.target'
-              } > /etc/systemd/system/home-vagrant-.cache-pip.mount
-              systemctl enable --now root-.cache-pip.mount
-              systemctl enable --now home-vagrant-.cache-pip.mount
-              chown -R vagrant:vagrant /home/vagrant/.cache
              "
 
   config.vm.define :admin do |admin|
