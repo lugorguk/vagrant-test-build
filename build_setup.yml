@@ -1,0 +1,140 @@
+---
+- hosts: localhost,admin
+  tasks:
+  - name: Find all the Vagrant keys
+    find:
+      paths: /vagrant/.vagrant/machines/
+      patterns: "private_key"
+      recurse: yes
+    register: find_keys
+
+  - name: Match keys to key
+    set_fact:
+      machine_keys: |
+        {
+          {% for a_key in find_keys.files %}
+            "{{ a_key.path | regex_replace('^/vagrant/.vagrant/machines/([^/]+)/[^/]+/private_key$', '\1') }}": "{{ a_key.path }}",
+          {% endfor %}
+        }
+
+  - name: Read Vagrantfile to find details of the machines
+    set_fact:
+      vagrantfile: |-
+        {
+          {% set ns = namespace(machine = '', ip = '', fqdn = '') %}
+          {%- for line in lookup('file', 'Vagrantfile').splitlines() %}
+            {%- if line | regex_search('config.vm.define \"([^\"]+)') | regex_replace('config.vm.define \"', '') != "None" %}
+              {%- set ns.machine = line | regex_search('config.vm.define \"([^\"]+)') | regex_replace('config.vm.define \"', '') %}
+            {%- elif line | regex_search('.vm.network \"private_network\", ip:\s+\"([^\"]+)') | regex_replace('.vm.network \"private_network\", ip:\s+\"', '') != "None" %}
+              {%- set ns.ip = line| regex_search('.vm.network \"private_network\", ip:\s+\"([^\"]+)') | regex_replace('.vm.network \"private_network\", ip:\s+\"', '') %}
+            {%- elif line | regex_search('.vm.hostname\s*=\s*\"([^\"]+)') | regex_replace('.vm.hostname\s*=\s*\"', '') != "None" %}
+              {%- set ns.fqdn = line | regex_search('.vm.hostname\s*=\s*\"([^\"]+)') | regex_replace('.vm.hostname\s*=\s*\"', '') %}
+            {%- endif %}
+
+            {%- if ns.machine | length > 0 and ns.ip | length > 0 and ns.fqdn | length > 0 %}
+              "{{ ns.machine }}": {
+                "ip": "{{ ns.ip }}",
+                "fqdn": "{{ ns.fqdn }}",
+                "src_key": "{{ machine_keys[ns.machine] | default('') }}",
+                "private_key": "~/.ssh/{{ ns.machine }}"
+              },
+              {%- set ns.machine = '' %}{%- set ns.ip = '' %}{%- set ns.fqdn = '' %}
+            {%- endif %}
+          {%- endfor %}
+        }
+
+  - name: Create .ssh directory
+    file:
+      path: "{{ item }}"
+      mode: "0700"
+      owner: root
+      group: root
+      state: directory
+    loop:
+    - /root/.ssh/
+    - /root/.ssh/config.d/
+
+  - name: Create .ssh/config
+    copy:
+      dest: "/root/.ssh/config"
+      content: |
+        Include config.d/*
+
+        Host *
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+      owner: root
+      group: root
+      mode: "0600"
+
+  - name: Import Vagrant Keys into Root Keys
+    copy:
+      remote_src: yes
+      src: "{{ item.value.src_key }}"
+      dest: "/root/.ssh/{{ item.key }}"
+      mode: "0600"
+      owner: root
+      group: root
+    loop: "{{ vagrantfile | dict2items }}"
+    loop_control:
+      label: "{{ item.key }}"
+
+  - name: Create SSH Config Values
+    copy:
+      dest: "/root/.ssh/config.d/{{ item.key }}"
+      content: |
+        Host {{ item.value.fqdn }} {{ item.key }} {{ item.value.ip }}
+          User vagrant
+          Hostname {{ item.value.ip }}
+          IdentityFile {{ item.value.private_key }}
+      owner: root
+      group: root
+      mode: "0600"
+    loop: "{{ vagrantfile | dict2items }}"
+    loop_control:
+      label: "{{ item.key }}"
+
+  - name: Create /etc/ansible/hosts
+    copy:
+      dest: "/etc/ansible/hosts"
+      content: |
+        [all]
+        {% for item in vagrantfile | dict2items %}
+        {{ item.key }}
+        {% endfor %}
+
+        [dns-group]
+        {% for item in vagrantfile | dict2items %}
+        {% if item.key == 'admin' %}
+        {{ item.key }} ansible_host={{ item.value.ip }}
+        {% endif %}
+        {% endfor %}
+
+        [web-group]
+        {% for item in vagrantfile | dict2items %}
+        {% if item.key == 'web-01' or item.key == 'snm' %}
+        {{ item.key }} ansible_host={{ item.value.ip }}
+        {% endif %}
+        {% endfor %}
+
+        [mail-group]
+        {% for item in vagrantfile | dict2items %}
+        {% if item.key == 'mail-in-01' %}
+        {{ item.key }} ansible_host={{ item.value.ip }}
+        {% endif %}
+        {% endfor %}
+
+        [mailman-group]
+        {% for item in vagrantfile | dict2items %}
+        {% if item.key == 'mailman' %}
+        {{ item.key }} ansible_host={{ item.value.ip }}
+        {% endif %}
+        {% endfor %}
+      owner: root
+      group: root
+      mode: "0644"
+  
+  - name: Install python3-pip
+    apt:
+      name: python3-pip
+      state: present

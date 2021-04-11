@@ -1,144 +1,61 @@
+# Based on https://vtorosyan.github.io/ansible-docker-vagrant/
+# and https://github.com/AkihiroSuda/containerized-systemd/
+# and https://developers.redhat.com/blog/2016/09/13/running-systemd-in-a-non-privileged-container/
+# with tweaks indicated by https://github.com/containers/podman/issues/3295
+ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
 Vagrant.configure("2") do |config|
-  config.vm.box = "debian/contrib-buster64"
-  config.vm.boot_timeout = 0
-
-  config.vm.box_check_update = false
-
-  config.vm.provider "virtualbox" do |v|
-    v.memory = 1536 # 1.5Gb
+  config.vm.provider "docker" do |d|
+    d.build_dir       = "."
+    d.has_ssh         = true
+    d.remains_running = false
+    d.create_args     = ['--tmpfs', '/tmp', '--tmpfs', '/run', '--tmpfs', '/run/lock', '-v', '/sys/fs/cgroup:/sys/fs/cgroup:ro', '-t']
   end
 
-  config.vagrant.plugins = [ "vagrant-cachier" ]
-
-  config.cache.scope = :box
-  config.cache.enable :apt
-  config.cache.enable :apt_lists
-  config.cache.enable :generic, {
-    "vagrant_pip" => {
-      cache_dir: "/mnt/pip/vagrant"
-    },
-    "root_pip" => {
-      cache_dir: "/mnt/pip/root"
-    },
-  }
-
-  config.vm.provision "shell",
-    inline:  "if [ ! -e /root/.ssh ]
-              then
-                mkdir /root/.ssh
-                cp -Rf /home/vagrant/.ssh/authorized_keys /root/.ssh/authorized_keys
-                chmod 600 /root/.ssh/authorized_keys
-                chmod 700 /root/.ssh
-                chown -R root:root /root/.ssh
-              fi
-              apt update && apt install -y bindfs
-              {
-                echo '[Unit]'
-                echo 'Description=BindFS Mount of /mnt/pip/root to /root/.cache/pip'
-                echo ''
-                echo '[Mount]'
-                echo 'What=/mnt/pip/root'
-                echo 'Where=/root/.cache/pip'
-                echo 'Type=fuse.bindfs'
-                echo 'Options=user=root,group=root,perms=0640:ugd+x'
-                echo ''
-                echo '[Install]'
-                echo 'WantedBy=multi-user.target'
-              } > /etc/systemd/system/root-.cache-pip.mount
-              {
-                echo '[Unit]'
-                echo 'Description=BindFS Mount of /mnt/pip/vagrant to /home/vagrant/.cache/pip'
-                echo ''
-                echo '[Mount]'
-                echo 'What=/mnt/pip/vagrant'
-                echo 'Where=/home/vagrant/.cache/pip'
-                echo 'Type=fuse.bindfs'
-                echo 'Options=user=vagrant,group=vagrant,perms=0640:ugd+x'
-                echo ''
-                echo '[Install]'
-                echo 'WantedBy=multi-user.target'
-              } > /etc/systemd/system/home-vagrant-.cache-pip.mount
-              systemctl enable --now root-.cache-pip.mount
-              systemctl enable --now home-vagrant-.cache-pip.mount
-              chown -R vagrant:vagrant /home/vagrant/.cache
-             "
-
-  config.vm.define :admin do |admin|
-    admin.vm.hostname = "admin.lug.org.uk"
-    admin.vm.network "private_network", ip: "203.0.113.10" # RFC5737 Test Network 3
-    admin.vm.provider "virtualbox" do |v|
-      v.name = "admin"
+  config.vm.define "mailman" do |mailman|
+    mailman.vm.hostname = "mailman.lug.org.uk"
+    mailman.vm.network "private_network", ip: "2001:ba8:1f1:f090::2"
+    mailman.vm.provider "docker" do |d|
+      d.name = "mailman_lug_org_uk"
     end
+  end
 
-    admin.vm.provision "shell", 
-      inline:  "#!/bin/bash
-                if [ -z \"$(command -v ansible)\" ]
-                then
-                  if [ -z \"$(command -v pip3)\" ]
-                  then
-                    apt update
-                    apt install -y python3-pip curl
-                  fi
-                  if [ -e /vagrant/Ansible/requirements.txt ]
-                  then
-                    pip3 install --upgrade -r /vagrant/Ansible/requirements.txt
-                  else
-                    pip3 install --upgrade ansible
-                  fi
-                fi
-                AnsibleVersion=\"$(pip3 freeze 2>/dev/null | grep ansible= | cut -d= -f3)\"
+  config.vm.define "mail-in-01" do |mailin01|
+    mailin01.vm.hostname = "mail-in-01.lug.org.uk"
+    mailin01.vm.network "private_network", ip: "2001:ba8:1f1:f08d::2"
+    mailin01.vm.provider "docker" do |d|
+      d.name = "mailin01_lug_org_uk"
+    end
+  end
 
-                mkdir -p /etc/ansible/keys
-                chmod 755 /etc/ansible
-                find /vagrant/.vagrant/machines -type f -name private_key -exec bash /vagrant/populate_machine_keys '{}' /etc/ansible/keys \\;
-                chown -R vagrant:vagrant /etc/ansible/keys
-                chmod 600 /etc/ansible/keys/*
-                chmod 700 /etc/ansible/keys
+  config.vm.define "snm" do |snm|
+    snm.vm.hostname = "snm.lug.org.uk"
+    snm.vm.network "private_network", ip: "2001:ba8:1f1:f075::2"
+    snm.vm.provider "docker" do |d|
+      d.name = "snm_lug_org_uk"
+    end
+  end
 
-                #if [ ! -e /etc/ansible/ansible.cfg ]
-                #then
-                #  wget -q \"https://raw.githubusercontent.com/ansible/ansible/v${AnsibleVersion}/examples/ansible.cfg\" -O /etc/ansible/ansible.cfg
-                #  chmod 644 /etc/ansible/ansible.cfg
-                #  ansible localhost -m lineinfile -a \"regexp='^#?host_key_checking.*' line='host_key_checking = False' path=/etc/ansible/ansible.cfg\"
-                #  ansible localhost -m lineinfile -a \"regexp='^#?ssh_args.*' line='ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes' path=/etc/ansible/ansible.cfg\"
-                #fi
-                if [ ! -e /etc/ansible/hosts ]
-                then
-                  echo 'admin ansible_connection=local' > /etc/ansible/hosts
-                  # echo 'SOME_HOST ansible_host=192.0.2.1 ansible_user=root' >> /etc/ansible/hosts
-                  chmod 644 /etc/ansible/hosts
-                fi
-                chown -R root:vagrant /etc/ansible
-                if [ -z \"$(command -v bindfs)\" ]
-                then
-                  apt update
-                  apt install -y bindfs
-                fi
-                mkdir -p /etc/ansible/install
-                if [ ! -e '/etc/systemd/system/etc-ansible-install.mount' ]
-                then
-                  {
-                    echo '[Unit]'
-                    echo 'Description=BindFS Mount of /vagrant/Ansible to /etc/ansible/install'
-                    echo ''
-                    echo '[Mount]'
-                    echo 'What=/vagrant/Ansible'
-                    echo 'Where=/etc/ansible/install'
-                    echo 'Type=fuse.bindfs'
-                    echo 'Options=mirror=root:vagrant,perms=0640:ugd+x'
-                    echo ''
-                    echo '[Install]'
-                    echo 'WantedBy=multi-user.target'
-                  } > /etc/systemd/system/etc-ansible-install.mount
-                fi
-                systemctl enable --now etc-ansible-install.mount"
+  config.vm.define "web-01" do |web01|
+    web01.vm.hostname = "web-01.lug.org.uk"
+    web01.vm.network "private_network", ip: "2001:ba8:1f1:f091::2"
+    web01.vm.provider "docker" do |d|
+      d.name = "web01_lug_org_uk"
+    end
+  end
+
+  config.vm.define "admin" do |admin|
+    admin.vm.hostname = "admin.lug.org.uk"
+    admin.vm.network "private_network", ip: "2001:ba8:1f1:f08c::2"
+    admin.vm.provider "docker" do |d|
+      d.name = "admin_lug_org_uk"
+    end
 
     admin.vm.provision "ansible_local", run: "always" do |ansible|
-      ansible.playbook            = "/etc/ansible/install/site.yml"
-      ansible.limit               = "all"
-      ansible.playbook_command    = "/usr/bin/sudo /usr/local/bin/ansible-playbook"
-      ansible.vault_password_file = "/etc/ansible/install/vaultpw"
-      ansible.inventory_path      = "/etc/ansible/hosts"
+      ansible.playbook         = "build_setup.yml"
+      ansible.playbook_command = "sudo ansible-playbook"
+      ansible.install_mode     = "pip"
+      ansible.pip_install_cmd  = "sudo apt install -y python3-pip && sudo rm -f /usr/bin/pip && sudo ln -s /usr/bin/pip3 /usr/bin/pip"
     end
   end
+
 end
